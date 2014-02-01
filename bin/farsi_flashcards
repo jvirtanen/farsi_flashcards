@@ -1,0 +1,76 @@
+#!/usr/bin/env python
+
+import collections
+import re
+import sys
+
+
+Entry = collections.namedtuple('Entry', ['origin', 'latin', 'translation'])
+
+
+def main(args):
+    if len(args) != 2:
+        usage()
+
+    filename = args[1]
+
+    text = read(filename)
+
+    for entry in entries(text):
+        print formatted(entry).encode('utf-8')
+
+
+def entries(text):
+    origin = None
+
+    for line in text.splitlines():
+
+        # If a line starts with a horizontal tab character and contains at
+        # least one character from the Arabic range of Unicode, treat it as
+        # the origin.
+        if re.match(ur'^\t.*[\u0600-\u06ff].*$', line):
+            origin = line.strip()
+            continue
+
+        # If a line starts with a horizontal tab character and contains two
+        # phrases separated by a semicolon, treat these as the transliteration
+        # and translation, respectively.
+        result = re.match(ur'^\t([^;]+);(.+)$', line)
+        if result:
+            if not origin:
+                warning('Found orphan transliteration and translation')
+                continue
+
+            latin       = result.group(1).strip()
+            translation = result.group(2).strip()
+
+            yield Entry(origin, latin, translation)
+
+            origin = None
+
+
+def formatted(entry):
+    return u'{0}\t{1}\t{2}'.format(entry.origin, entry.latin, entry.translation)
+
+
+def read(filename):
+    try:
+        with open(filename, 'r') as infile:
+            return infile.read().decode('utf-8')
+    except IOError as e:
+        error('{0}: {1}'.format(filename, e.strerror))
+
+
+def error(message):
+    sys.exit('error: {0}'.format(message))
+
+
+def warning(message):
+    sys.stderr.write('warning: {0}\n'.format(message))
+
+
+def usage():
+    sys.exit('Usage: farsi_flashcards <file>')
+
+
+main(sys.argv)
